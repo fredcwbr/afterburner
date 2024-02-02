@@ -412,8 +412,8 @@ galinfo_t galinfo __attribute__ ((section (".noinit"))); //preserve data between
 // MAXFUSES calculated as the biggest required space to hold the fuse bitmap
 // MAXFUSES = GAL6002 8330 bits = 8330/8 = 1041.25 bytes rounded up to 1042 bytes
 //#define MAXFUSES 1042
-//extra space added for sparse fusemap
-#define MAXFUSES 1280
+//extra space added for sparse fusemap (just enough to fit erased ATF750C)
+#define MAXFUSES 1332
 #define USE_SPARSE_FUSEMAP
 #endif
 
@@ -1569,11 +1569,6 @@ static void readGalFuseMap(const unsigned char* cfgArray, char useDelay, char do
   unsigned short cfgAddr = galinfo.cfgbase;
   unsigned short row, bit;
   unsigned short addr;
-  uint8_t rotatedFuseMap = 0; // when fusemap rows and columns in addressing are swapped, then set to 1
-
-  if (gal == ATF750C) {
-    rotatedFuseMap = 1;
-  }
 
   if (flagBits & FLAG_BIT_ATF16V8C) {
       setPV(0);
@@ -1588,15 +1583,9 @@ static void readGalFuseMap(const unsigned char* cfgArray, char useDelay, char do
     for(bit = 0; bit < galinfo.bits; bit++) {
       // check the received bit is 1 and if so then set the fuse map
       if (receiveBit()) {
-        if (rotatedFuseMap) {
-          addr = galinfo.bits;
-          addr *= row;
-          addr += bit;
-        } else {
-          addr = galinfo.rows;
-          addr *= bit;
-          addr += row;
-        }
+        addr = galinfo.rows;
+        addr *= bit;
+        addr += row;
         setFuseBit(addr);
       }
     }
@@ -1747,11 +1736,7 @@ static unsigned short verifyGalFuseMap(const unsigned char* cfgArray, char useDe
   char fuseBit;   // fuse bit received from GAL
   char mapBit;    // fuse bit stored in RAM
   unsigned short errors = 0;
-  uint8_t rotatedFuseMap = 0; // when fusemap rows and columns in addressing are swapped, then set to 1
 
-  if (gal == ATF750C) {
-    rotatedFuseMap = 1;
-  }
 #ifdef DEBUG_VERIFY
   Serial.print(F("rot f:"));
   Serial.println(rotatedFuseMap, DEC);
@@ -1769,15 +1754,9 @@ static unsigned short verifyGalFuseMap(const unsigned char* cfgArray, char useDe
         setPV(1);
     }
     for(bit = 0; bit < galinfo.bits; bit++) {
-      if (rotatedFuseMap) {
-        addr = galinfo.bits;
-        addr *= row;
-        addr += bit;
-      } else {
-        addr = galinfo.rows;
-        addr *= bit;
-        addr += row;
-      }
+      addr = galinfo.rows;
+      addr *= bit;
+      addr += row;
       mapBit = getFuseBit(addr); //bit from RAM
       fuseBit = receiveBit(); // read from GAL
       if (mapBit != fuseBit) {
@@ -2216,7 +2195,9 @@ static void writeGalFuseMapV750(const unsigned char* cfgArray) {
   delayMicroseconds(20);
   for(row = 0; row < galinfo.rows; row++) {
     for (bit = 0; bit < galinfo.bits; bit++) {
-      addr = (galinfo.bits * row) + bit;
+      addr = galinfo.rows;
+      addr *= bit;
+      addr += row;
       sendBit(getFuseBit(addr));
     }
 
@@ -2596,6 +2577,7 @@ static void printGalName() {
     case ATF20V8B: Serial.println(F("ATF20V8B")); break;
     case ATF22V10B: Serial.println(F("ATF22V10B")); break;
     case ATF22V10C: Serial.println(F("ATF22V10C")); break;
+    case ATF750C: Serial.println(F("ATF750C")); break;
     default:  Serial.println(F("GAL")); break;
     }
 }
